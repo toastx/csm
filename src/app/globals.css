@@ -2,18 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+
 html,
 body {
     height: 100%;
+    background-color: #f9fafb;
+    color: #111827;
+    font-family: 'Roboto Mono', monospace;
+}
+
+button {
+    background-color: #111827;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.navbar {
+    background-color: #f9fafb;
+    color: #111827;
+    padding: 12px 24px;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.3s ease-in-out;
+}
+
+.navbar a {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: 'Roboto Mono', monospace;
+    transition: all 0.3s ease-in-out;
+}
+
+.navbar a:hover {
+    background-color: #e5e7eb;
+    color: #000;
+}
+
+.navbar button {
+    background-color: #111827;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: 'Roboto Mono', monospace;
+    transition: all 0.3s ease-in-out;
+}
+
+.navbar button:hover {
+    background-color: #1f2937;
 }
 
 .wallet-adapter-button-trigger {
-    background: rgb(100, 26, 230) !important;
+    background: #111827 !important;
+    color: white !important;
     border-radius: 8px !important;
     padding-left: 16px !important;
     padding-right: 16px !important;
+    font-family: 'Roboto Mono', monospace !important;
 }
+
 .wallet-adapter-dropdown-list,
 .wallet-adapter-button {
-    font-family: inherit !important;
+    font-family: 'Roboto Mono', monospace !important;
 }
