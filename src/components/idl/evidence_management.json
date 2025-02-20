@@ -1,0 +1,428 @@
+{
+  "version": "0.1.0",
+  "name": "evidence_management",
+  "instructions": [
+    {
+      "name": "initializeAccessControl",
+      "accounts": [
+        {
+          "name": "accessControl",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "grantAccess",
+      "accounts": [
+        {
+          "name": "accessControl",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "adminAccess",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "wallet",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "wallet",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "revokeAccess",
+      "accounts": [
+        {
+          "name": "accessControl",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "adminAccess",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initializeCrimeScene",
+      "accounts": [
+        {
+          "name": "crimeScene",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userAccess",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "caseId",
+          "type": "string"
+        },
+        {
+          "name": "location",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "addSceneLog",
+      "accounts": [
+        {
+          "name": "crimeScene",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "sceneLog",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userAccess",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "officerId",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "addEvidence",
+      "accounts": [
+        {
+          "name": "crimeScene",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "evidence",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userAccess",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "evidenceId",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "name": "locationFound",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "addEvidenceLog",
+      "accounts": [
+        {
+          "name": "evidence",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "evidenceLog",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "userAccess",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "action",
+          "type": "string"
+        },
+        {
+          "name": "handler",
+          "type": "string"
+        },
+        {
+          "name": "notes",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AccessControl",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wallet",
+            "type": "publicKey"
+          },
+          {
+            "name": "hasAccess",
+            "type": "bool"
+          },
+          {
+            "name": "grantedBy",
+            "type": "publicKey"
+          },
+          {
+            "name": "admin",
+            "type": "publicKey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CrimeScene",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "caseId",
+            "type": "string"
+          },
+          {
+            "name": "location",
+            "type": "string"
+          },
+          {
+            "name": "logCount",
+            "type": "u64"
+          },
+          {
+            "name": "evidenceCount",
+            "type": "u64"
+          },
+          {
+            "name": "authority",
+            "type": "publicKey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SceneLog",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "crimeScene",
+            "type": "publicKey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "officerId",
+            "type": "string"
+          },
+          {
+            "name": "logNumber",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Evidence",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "crimeScene",
+            "type": "publicKey"
+          },
+          {
+            "name": "evidenceId",
+            "type": "string"
+          },
+          {
+            "name": "description",
+            "type": "string"
+          },
+          {
+            "name": "locationFound",
+            "type": "string"
+          },
+          {
+            "name": "logCount",
+            "type": "u64"
+          },
+          {
+            "name": "evidenceNumber",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EvidenceLog",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "evidence",
+            "type": "publicKey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          },
+          {
+            "name": "action",
+            "type": "string"
+          },
+          {
+            "name": "handler",
+            "type": "string"
+          },
+          {
+            "name": "notes",
+            "type": "string"
+          },
+          {
+            "name": "logNumber",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "TooLong",
+      "msg": "String length exceeds maximum allowed length."
+    },
+    {
+      "code": 6001,
+      "name": "AlreadyHasAccess",
+      "msg": "Wallet already has access"
+    },
+    {
+      "code": 6002,
+      "name": "NoAccess",
+      "msg": "Wallet does not have access"
+    },
+    {
+      "code": 6003,
+      "name": "Unauthorized",
+      "msg": "Unauthorized to perform this action"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidAdmin",
+      "msg": "Invalid admin"
+    }
+  ]
+}
