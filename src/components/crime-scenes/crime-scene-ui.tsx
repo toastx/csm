@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
-import { useCrimeScene } from './crime-scene-detail'; // Import the custom hook
+import { useCrimeScene,useEvidence } from './crime-scene-detail';
+import { getEvidencePDA } from './crime-scene-functions';
 
 interface CrimeScene {
   id: string;
@@ -27,7 +28,8 @@ export function CrimeScenesFeature() {
   const [selectedEvidence, setSelectedEvidence] = useState<FullEvidence | null>(null);
   const [scenes, setScenes] = useState<CrimeScene[]>([]);
   const [isCreateSceneModalOpen, setIsCreateSceneModalOpen] = useState(false);
-  const { createCrimeScene, addNewEvidence, isLoading, error } = useCrimeScene(); // Use the custom hook
+  const { createCrimeScene, isLoading: isSceneLoading, error: sceneError } = useCrimeScene();
+  const { addNewEvidence, isLoading: isEvidenceLoading, error: evidenceError } = useEvidence();
 
   const handleCreateCrimeScene = async (location: string) => {
     try {
@@ -71,7 +73,6 @@ export function CrimeScenesFeature() {
                 metadata,
                 createdAt: new Date().toISOString()
               };
-              // Simulate adding evidence to the scene (in a real app, this would be saved to a database or smart contract)
               console.log('New Evidence:', newEvidence);
             }
           } catch (error) {
@@ -85,7 +86,7 @@ export function CrimeScenesFeature() {
   return (
     <section id="crime-scenes" className="container mx-auto p-6">
       <h2 className="text-2xl font-semibold mb-4 text-gray-900">Crime Scenes</h2>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {sceneError && <p className="text-red-500 mb-4">{sceneError}</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {scenes.map((scene) => (
           <div key={scene.id} className="bg-white border border-gray-300 rounded-lg shadow-md p-6 transition-transform transform hover:-translate-y-1 hover:shadow-lg">
@@ -142,10 +143,10 @@ export function CrimeScenesFeature() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isSceneLoading}
                   className="bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500 disabled:bg-gray-400"
                 >
-                  {isLoading ? 'Creating...' : 'Create'}
+                  {isSceneLoading ? 'Creating...' : 'Create'}
                 </button>
               </div>
             </form>
@@ -166,6 +167,7 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
   const [isCreateEvidenceModalOpen, setIsCreateEvidenceModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { addNewEvidence, isLoading: isEvidenceLoading, error: evidenceError } = useEvidence();
 
   const handleEvidenceClick = async (item: Evidence) => {
     const fullEvidence = await fetchEvidenceData(item);
@@ -177,15 +179,18 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
     setError(null);
 
     try {
-      await onCreateEvidence(ipfsHash, metadata);
-      const newEvidence: Evidence = {
-        id: Math.random().toString(36).substr(2, 9), // Generate a random ID
-        ipfsHash,
-        metadata,
-        createdAt: new Date().toISOString()
-      };
-      setEvidence([...evidence, newEvidence]);
-      setIsCreateEvidenceModalOpen(false);
+      console.log(scene.id)
+      const evidencePDA = await addNewEvidence(new PublicKey(scene.id), ipfsHash, metadata);
+
+        const newEvidence: Evidence = {
+          id: Math.random().toString(36).substr(2, 9), // Generate a random ID
+          ipfsHash,
+          metadata,
+          createdAt: new Date().toISOString(),
+        };
+        setEvidence([...evidence, newEvidence]);
+        setIsCreateEvidenceModalOpen(false);
+      
     } catch (error) {
       console.error('Error creating evidence:', error);
       setError('An error occurred while creating evidence.');

@@ -192,17 +192,23 @@ anchorWallet:AnchorWallet
       evidenceId,
       anchorWallet
     );
-
+    const userAccessPDA = await getAccessControlPDA(anchorWallet.publicKey, anchorWallet);
+    const userAccessAccount = await program.account.accessControl.fetchNullable(userAccessPDA);
+        if (!userAccessAccount) {
+      await initializeAccessControl(authority, anchorWallet);
+        }
+    
     await program.methods
       .addEvidence(evidenceId, description, locationFound)
       .accounts({
         crimeScene: crimeScenePDA,
         evidence: evidencePDA,
-        userAccess: await getAccessControlPDA(authority, anchorWallet),
+        userAccess: userAccessPDA,
         authority,
         systemProgram: SystemProgram.programId,
       })
       .rpc();
+
     return evidencePDA;
   } catch (error) {
     console.error('Error adding evidence:', error);
@@ -252,10 +258,10 @@ export const getAccessControlPDA = async (wallet: PublicKey,anchorWallet:AnchorW
     const program = new Program(idl as Idl, PROGRAM_ID, provider);
 
     const seeds = [Buffer.from('access-control'), wallet.toBuffer()];
-    console.log('Seeds:', seeds);
+
   
     const [pda] = await PublicKey.findProgramAddress(seeds, program.programId);
-    console.log('Derived PDA:', pda.toBase58());
+ 
 
   return pda;
 };
@@ -267,11 +273,7 @@ export const grantAccessControlPDA = async (wallet: PublicKey,anchorWallet:Ancho
     const program = new Program(idl as Idl, PROGRAM_ID, provider);
 
     const seeds = [Buffer.from('user-access'), wallet.toBuffer()];
-    console.log('Seeds:', seeds);
-  
     const [pda] = await PublicKey.findProgramAddress(seeds, program.programId);
-    console.log('Derived PDA:', pda.toBase58());
-
   return pda;
 };
 
@@ -303,11 +305,17 @@ export const getEvidencePDA = async (crimeScene: PublicKey, evidenceId: string,a
 
     const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
     const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-    const [pda] = await PublicKey.findProgramAddress(
-    [Buffer.from('evidence'), crimeScene.toBuffer(), Buffer.from(evidenceId)],
-    program.programId
-  );
+  const program = new Program(idl as Idl, PROGRAM_ID, provider);
+  const seeds = [
+    Buffer.from("evidence"),
+    crimeScene.toBuffer(),
+    Buffer.from(evidenceId),
+];
+  console.log('Seeds:', seeds);
+
+  const [pda] = await PublicKey.findProgramAddress(seeds, program.programId);
+  console.log('Derived PDA:', pda.toBase58());
+
   return pda;
 };
 

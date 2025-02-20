@@ -32,30 +32,51 @@ export function useCrimeScene() {
       setIsLoading(false);
     }
   };
+  return {
+    createCrimeScene,
+    isLoading,
+    error,
+  };
+}
+export function useEvidence() {
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const anchorWallet = useAnchorWallet();
 
-  const addNewEvidence = async (crimeScenePDA: PublicKey, ipfsHash: string, metadata: string) => {
-    if (!wallet?.adapter?.publicKey) {
-      throw new Error('Wallet not connected');
-      }
-      if (!anchorWallet) {
-        throw new Error("Anchor wallet not connected");
-      }
-
+  const addNewEvidence = async (
+    crimeScenePDA: PublicKey,
+    ipfsHash: string,
+    metadata: string
+  ): Promise<PublicKey | null> => {
     setIsLoading(true);
     setError(null);
 
     try {
+      if (!anchorWallet) {
+        throw new Error('Wallet not connected');
+      }
+
+      const authority = anchorWallet.publicKey;
       const evidenceId = Math.random().toString(36).substr(2, 9); // Generate a random evidence ID
-      const evidencePDA = await addEvidence(wallet.adapter.publicKey, crimeScenePDA, evidenceId, metadata, location.toString(),anchorWallet);
+
+      const evidencePDA = await addEvidence(
+        authority,
+        crimeScenePDA,
+        evidenceId,
+        metadata,
+        "Location Found", // Replace with actual location found
+        anchorWallet
+      );
+
       return evidencePDA;
     } catch (error) {
       console.error('Error adding evidence:', error);
       setError('An error occurred while adding evidence.');
-      throw error;
+      return null;
     } finally {
       setIsLoading(false);
     }
   };
 
-  return { createCrimeScene, addNewEvidence, isLoading, error };
+  return { addNewEvidence, isLoading, error };
 }
