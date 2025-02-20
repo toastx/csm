@@ -7,9 +7,9 @@
 html,
 body {
     height: 100%;
-    background-color: #f9fafb;
     color: #111827;
     font-family: 'Roboto Mono', monospace;
+    background: #f9fafb url('../../public/echos.svg') no-repeat center/cover;   
 }
 
 button {
@@ -21,15 +21,14 @@ button {
 }
 
 .navbar {
-    background-color: #f9fafb;
-    color: #111827;
-    padding: 12px 24px;
-    border-radius: 16px;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    display: flex;
-    align-items: center;
+    border-bottom: 1px solid rgba(209, 213, 219, 0.6);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    background-color: #f9fafbd9;
     justify-content: space-between;
-    transition: all 0.3s ease-in-out;
+    align-items: center;
+    padding: 0.8rem 1.5rem;
+    display: flex;
 }
 
 .navbar a {
@@ -74,3 +73,5 @@ button {
 .wallet-adapter-button {
     font-family: 'Roboto Mono', monospace !important;
 }
+
+

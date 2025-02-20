@@ -17,7 +17,7 @@ export function UiLayout({ children, links }: { children: ReactNode; links: { la
       <div className="navbar bg-base-300 dark:text-neutral-content flex-col md:flex-row space-y-2 md:space-y-0">
         <div className="flex-1">
           <Link className="btn btn-ghost normal-case text-xl" href="/">
-            Menu
+            Home
           </Link>
           <ul className="menu menu-horizontal px-1 space-x-2">
             {links.map(({ label, path }) => (
@@ -113,17 +113,36 @@ export function AppHero({
   subtitle: ReactNode
 }) {
   return (
-    <div className="hero py-[64px]">
-      <div className="hero-content text-center">
-        <div className="max-w-2xl">
-          {typeof title === 'string' ? <h1 className="text-5xl font-bold">{title}</h1> : title}
-          {typeof subtitle === 'string' ? <p className="py-6">{subtitle}</p> : subtitle}
+    <div className="hero absolute bottom-0 left-0 w-full flex items-end justify-start pl-12 pb-12">
+      <div className="hero-content text-left max-w-2xl">
+        <div>
+          {typeof title === 'string' ? (
+            <h1 className="text-6xl font-bold leading-tight">{title}</h1>
+          ) : (
+            title
+          )}
+
+          {typeof subtitle === 'string' ? (
+            <p className="py-6 text-2xl">{subtitle}</p>
+          ) : (
+            subtitle
+          )}
+
+          <div className="mt-6">
+            <Link href="/crime-scenes">
+              <button className="bg-[#111827] text-white text-lg px-8 py-4 rounded-lg font-mono transition-all duration-300 hover:bg-[#1f2937]">
+                Go to Crime Scene
+              </button>
+            </Link>
+          </div>
+
           {children}
         </div>
       </div>
     </div>
   )
 }
+
 
 export function ellipsify(str = '', len = 4) {
   if (str.length > 30) {
