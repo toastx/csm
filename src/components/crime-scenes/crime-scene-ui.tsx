@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { PublicKey } from '@solana/web3.js';
+import { useCrimeScene } from './crime-scene-detail'; // Import the custom hook
 
 interface CrimeScene {
   id: string;
@@ -23,19 +25,28 @@ interface FullEvidence extends Evidence {
 export function CrimeScenesFeature() {
   const [selectedScene, setSelectedScene] = useState<CrimeScene | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<FullEvidence | null>(null);
-  const [scenes, setScenes] = useState<CrimeScene[]>([
-    { id: '12345', location: 'Downtown', createdAt: '2025-01-01', lastUpdated: '2025-01-10' },
-    { id: '67890', location: 'Midtown', createdAt: '2025-01-05', lastUpdated: '2025-01-08' }
-  ]);
+  const [scenes, setScenes] = useState<CrimeScene[]>([]);
+  const [isCreateSceneModalOpen, setIsCreateSceneModalOpen] = useState(false);
+  const { createCrimeScene, addNewEvidence, isLoading, error } = useCrimeScene(); // Use the custom hook
 
-  const handleCreateCrimeScene = (location: string) => {
-    const newScene: CrimeScene = {
-      id: Math.random().toString(36).substr(2, 9), // Generate a random ID
-      location,
-      createdAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString()
-    };
-    setScenes([...scenes, newScene]);
+  const handleCreateCrimeScene = async (location: string) => {
+    try {
+      const crimeScenePDA = await createCrimeScene(location);
+      console.log("Crime scene created:", crimeScenePDA);
+
+      if (crimeScenePDA) {
+        const newScene: CrimeScene = {
+          id: crimeScenePDA.toString(),
+          location,
+          createdAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString()
+        };
+        setScenes([...scenes, newScene]);
+        setIsCreateSceneModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Error creating crime scene:', error);
+    }
   };
 
   if (selectedEvidence) {
@@ -43,31 +54,38 @@ export function CrimeScenesFeature() {
   }
 
   if (selectedScene) {
-    return <CrimeSceneDetail 
-      scene={selectedScene} 
-      onBack={() => setSelectedScene(null)} 
-      onSelectEvidence={setSelectedEvidence} 
-      onCreateEvidence={(ipfsHash, metadata) => {
-        const newEvidence: Evidence = {
-          id: Math.random().toString(36).substr(2, 9), // Generate a random ID
-          ipfsHash,
-          metadata,
-          createdAt: new Date().toISOString()
-        };
-        // Update the selected scene with the new evidence
-        setSelectedScene({
-          ...selectedScene,
-          lastUpdated: new Date().toISOString()
-        });
-        // Simulate adding evidence to the scene (in a real app, this would be saved to a database or smart contract)
-        console.log('New Evidence:', newEvidence);
-      }}
-    />;
+    return (
+      <CrimeSceneDetail 
+        scene={selectedScene} 
+        onBack={() => setSelectedScene(null)} 
+        onSelectEvidence={setSelectedEvidence} 
+        onCreateEvidence={async (ipfsHash, metadata) => {
+          try {
+            const crimeScenePDA = new PublicKey(selectedScene.id);
+            const evidencePDA = await addNewEvidence(crimeScenePDA, ipfsHash, metadata);
+
+            if (evidencePDA) {
+              const newEvidence: Evidence = {
+                id: evidencePDA.toString(),
+                ipfsHash,
+                metadata,
+                createdAt: new Date().toISOString()
+              };
+              // Simulate adding evidence to the scene (in a real app, this would be saved to a database or smart contract)
+              console.log('New Evidence:', newEvidence);
+            }
+          } catch (error) {
+            console.error('Error adding evidence:', error);
+          }
+        }}
+      />
+    );
   }
 
   return (
     <section id="crime-scenes" className="container mx-auto p-6">
       <h2 className="text-2xl font-semibold mb-4 text-gray-900">Crime Scenes</h2>
+      {error && <p className="text-red-500 mb-4">{error}</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {scenes.map((scene) => (
           <div key={scene.id} className="bg-white border border-gray-300 rounded-lg shadow-md p-6 transition-transform transform hover:-translate-y-1 hover:shadow-lg">
@@ -83,16 +101,57 @@ export function CrimeScenesFeature() {
           </div>
         ))}
       </div>
+
       <button 
-        onClick={() => {
-          const location = prompt('Enter the location of the new crime scene:');
-          if (location) {
-            handleCreateCrimeScene(location);
-          }
-        }} 
+        onClick={() => setIsCreateSceneModalOpen(true)} 
         className="mt-6 bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500">
         Create New Crime Scene
       </button>
+
+      {/* Modal for creating a new crime scene */}
+      {isCreateSceneModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Create New Crime Scene</h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const location = (e.target as HTMLFormElement).location.value;
+                if (location) {
+                  await handleCreateCrimeScene(location);
+                }
+              }}
+            >
+              <div className="mb-4">
+                <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
+                <input
+                  type="text"
+                  id="location"
+                  name="location"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateSceneModalOpen(false)}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-md transition hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500 disabled:bg-gray-400"
+                >
+                  {isLoading ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -103,21 +162,22 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
   onSelectEvidence: (evidence: FullEvidence) => void;
   onCreateEvidence: (ipfsHash: string, metadata: string) => void;
 }) {
-  const [evidence, setEvidence] = useState<Evidence[]>([
-    { id: 'E123', ipfsHash: 'Qm1234567890abcdefgh', metadata: 'Drug evidence', createdAt: '2025-01-02' },
-    { id: 'E124', ipfsHash: 'Qm9876543210hgfedcba', metadata: 'Photos', createdAt: '2025-01-03' }
-  ]);
+  const [evidence, setEvidence] = useState<Evidence[]>([]);
+  const [isCreateEvidenceModalOpen, setIsCreateEvidenceModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleEvidenceClick = async (item: Evidence) => {
     const fullEvidence = await fetchEvidenceData(item);
     onSelectEvidence(fullEvidence);
   };
 
-  const handleCreateEvidence = () => {
-    const ipfsHash = prompt('Enter the IPFS hash of the evidence:');
-    const metadata = prompt('Enter the metadata for the evidence:');
-    if (ipfsHash && metadata) {
-      onCreateEvidence(ipfsHash, metadata);
+  const handleCreateEvidence = async (ipfsHash: string, metadata: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await onCreateEvidence(ipfsHash, metadata);
       const newEvidence: Evidence = {
         id: Math.random().toString(36).substr(2, 9), // Generate a random ID
         ipfsHash,
@@ -125,6 +185,12 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
         createdAt: new Date().toISOString()
       };
       setEvidence([...evidence, newEvidence]);
+      setIsCreateEvidenceModalOpen(false);
+    } catch (error) {
+      console.error('Error creating evidence:', error);
+      setError('An error occurred while creating evidence.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -144,10 +210,11 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
       
       <h3 className="text-xl font-semibold text-gray-900 mt-6">Evidence</h3>
       <button 
-        onClick={handleCreateEvidence} 
+        onClick={() => setIsCreateEvidenceModalOpen(true)} 
         className="mt-4 bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500">
         Add New Evidence
       </button>
+      {error && <p className="text-red-500 mt-4">{error}</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
         {evidence.map(item => (
           <div key={item.id} className="bg-white border border-gray-300 rounded-lg shadow-md p-6 transition-transform transform hover:-translate-y-1 hover:shadow-lg">
@@ -163,6 +230,62 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
           </div>
         ))}
       </div>
+
+      {/* Modal for creating new evidence */}
+      {isCreateEvidenceModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">Add New Evidence</h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const ipfsHash = (e.target as HTMLFormElement).ipfsHash.value;
+                const metadata = (e.target as HTMLFormElement).metadata.value;
+                if (ipfsHash && metadata) {
+                  await handleCreateEvidence(ipfsHash, metadata);
+                }
+              }}
+            >
+              <div className="mb-4">
+                <label htmlFor="ipfsHash" className="block text-sm font-medium text-gray-700">IPFS Hash</label>
+                <input
+                  type="text"
+                  id="ipfsHash"
+                  name="ipfsHash"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="mb-4">
+                <label htmlFor="metadata" className="block text-sm font-medium text-gray-700">Metadata</label>
+                <input
+                  type="text"
+                  id="metadata"
+                  name="metadata"
+                  required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreateEvidenceModalOpen(false)}
+                  className="bg-gray-500 text-white px-4 py-2 rounded-md transition hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500 disabled:bg-gray-400"
+                >
+                  {isLoading ? 'Adding...' : 'Add Evidence'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
