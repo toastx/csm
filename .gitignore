@@ -35,3 +35,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 tmp
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+node_modules
+test-ledger
+.yarn
