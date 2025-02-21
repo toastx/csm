@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { useCrimeScene,useEvidence } from './crime-scene-detail';
-import { getEvidencePDA } from './crime-scene-functions';
+import { getCrimeScenes, getEvidencePDA } from './crime-scene-functions';
+import { useWallet } from '@solana/wallet-adapter-react';
 
 interface CrimeScene {
   id: string;
@@ -30,7 +31,18 @@ export function CrimeScenesFeature() {
   const [isCreateSceneModalOpen, setIsCreateSceneModalOpen] = useState(false);
   const { createCrimeScene, isLoading: isSceneLoading, error: sceneError } = useCrimeScene();
   const { addNewEvidence, isLoading: isEvidenceLoading, error: evidenceError } = useEvidence();
-
+  const [loading, setLoading] = useState<boolean>(true);
+  const wallet = useWallet();
+  
+    useEffect(() => {
+      if (wallet.publicKey) {
+        setLoading(true);
+        getCrimeScenes(wallet)
+          .then(setScenes)
+          .finally(() => setLoading(false));
+      }
+    }, [wallet.publicKey]);
+  
   const handleCreateCrimeScene = async (location: string) => {
     try {
       const crimeScenePDA = await createCrimeScene(location);
