@@ -9,7 +9,7 @@ const MAX_ACTION_LEN: usize = 100;
 const MAX_HANDLER_LEN: usize = 50;
 const MAX_NOTES_LEN: usize = 200;
 
-declare_id!("FPqGhJFbRbR5hMWw3UsLMQ4G7QgJDJFGKZHTRtHg1tXY");
+declare_id!("G7AQkCtNnSZdJqZdtU2uqyT2Jzvt7sDVGXLmE9TcRGGo");
 
 #[program]
 pub mod evidence_management {
@@ -55,6 +55,8 @@ pub mod evidence_management {
         crime_scene.log_count = 0;
         crime_scene.evidence_count = 0;
         crime_scene.authority = ctx.accounts.authority.key();
+        crime_scene.scene_logs = Vec::new();
+        crime_scene.evidence_items = Vec::new();
         Ok(())
     }
 
@@ -77,6 +79,7 @@ pub mod evidence_management {
         log.officer_id = officer_id;
         log.log_number = crime_scene.log_count;
 
+        crime_scene.scene_logs.push(log.key());
         crime_scene.log_count += 1;
         Ok(())
     }
@@ -101,7 +104,9 @@ pub mod evidence_management {
         evidence.location_found = location_found;
         evidence.log_count = 0;
         evidence.evidence_number = crime_scene.evidence_count;
+        evidence.evidence_logs = Vec::new();
 
+        crime_scene.evidence_items.push(evidence.key());
         crime_scene.evidence_count += 1;
         Ok(())
     }
@@ -128,8 +133,21 @@ pub mod evidence_management {
         log.notes = notes;
         log.log_number = evidence.log_count;
 
+        evidence.evidence_logs.push(log.key());
         evidence.log_count += 1;
         Ok(())
+    }
+
+    pub fn get_crime_scene_logs(ctx: Context<GetCrimeSceneLogs>) -> Result<Vec<Pubkey>> {
+        Ok(ctx.accounts.crime_scene.scene_logs.clone())
+    }
+
+    pub fn get_crime_scene_evidence(ctx: Context<GetCrimeSceneEvidence>) -> Result<Vec<Pubkey>> {
+        Ok(ctx.accounts.crime_scene.evidence_items.clone())
+    }
+
+    pub fn get_evidence_logs(ctx: Context<GetEvidenceLogs>) -> Result<Vec<Pubkey>> {
+        Ok(ctx.accounts.evidence.evidence_logs.clone())
     }
 }
 
@@ -148,6 +166,8 @@ pub struct CrimeScene {
     pub log_count: u64,
     pub evidence_count: u64,
     pub authority: Pubkey,
+    pub scene_logs: Vec<Pubkey>,
+    pub evidence_items: Vec<Pubkey>,
 }
 
 #[account]
@@ -167,6 +187,7 @@ pub struct Evidence {
     pub location_found: String,
     pub log_count: u64,
     pub evidence_number: u64,
+    pub evidence_logs: Vec<Pubkey>,
 }
 
 #[account]
@@ -227,7 +248,8 @@ pub struct InitializeCrimeScene<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 4 + case_id.len() + 4 + location.len() + 8 + 8 + 32,
+        space = 8 + 4 + case_id.len() + 4 + location.len() + 8 + 8 + 32 + 
+                (4 + 32 * 100) + (4 + 32 * 100),
         seeds = [b"crime-scene", case_id.as_bytes()],
         bump,
     )]
@@ -263,7 +285,8 @@ pub struct AddEvidence<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 4 + MAX_CASE_ID_LEN + 4 + MAX_DESCRIPTION_LEN + 4 + MAX_LOCATION_LEN + 8 + 8,
+        space = 8 + 32 + 4 + MAX_CASE_ID_LEN + 4 + MAX_DESCRIPTION_LEN + 4 + MAX_LOCATION_LEN + 8 + 8 + 
+                (4 + 32 * 100),
         seeds = [b"evidence", crime_scene.key().as_ref(), &crime_scene.evidence_count.to_le_bytes()],
         bump,
     )]
@@ -290,6 +313,21 @@ pub struct AddEvidenceLog<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct GetCrimeSceneLogs<'info> {
+    pub crime_scene: Account<'info, CrimeScene>,
+}
+
+#[derive(Accounts)]
+pub struct GetCrimeSceneEvidence<'info> {
+    pub crime_scene: Account<'info, CrimeScene>,
+}
+
+#[derive(Accounts)]
+pub struct GetEvidenceLogs<'info> {
+    pub evidence: Account<'info, Evidence>,
 }
 
 #[error_code]
