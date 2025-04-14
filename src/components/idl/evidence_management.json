@@ -250,6 +250,48 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "getCrimeSceneLogs",
+      "accounts": [
+        {
+          "name": "crimeScene",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [],
+      "returns": {
+        "vec": "publicKey"
+      }
+    },
+    {
+      "name": "getCrimeSceneEvidence",
+      "accounts": [
+        {
+          "name": "crimeScene",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [],
+      "returns": {
+        "vec": "publicKey"
+      }
+    },
+    {
+      "name": "getEvidenceLogs",
+      "accounts": [
+        {
+          "name": "evidence",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [],
+      "returns": {
+        "vec": "publicKey"
+      }
     }
   ],
   "accounts": [
@@ -301,6 +343,18 @@
           {
             "name": "authority",
             "type": "publicKey"
+          },
+          {
+            "name": "sceneLogs",
+            "type": {
+              "vec": "publicKey"
+            }
+          },
+          {
+            "name": "evidenceItems",
+            "type": {
+              "vec": "publicKey"
+            }
           }
         ]
       }
@@ -361,6 +415,12 @@
           {
             "name": "evidenceNumber",
             "type": "u64"
+          },
+          {
+            "name": "evidenceLogs",
+            "type": {
+              "vec": "publicKey"
+            }
           }
         ]
       }

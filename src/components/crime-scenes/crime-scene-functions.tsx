@@ -1,16 +1,37 @@
-'use client'
-import { clusterApiUrl, Connection, Keypair, PublicKey, SystemProgram, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { BN, Program, AnchorProvider, Idl } from '@project-serum/anchor';
-import idl from "../idl/evidence_management.json";
-import { AnchorWallet, useAnchorWallet } from "@solana/wallet-adapter-react";
+'use client';
+import {
+  clusterApiUrl,
+  Connection,
+  Keypair, // Not used in this refactor, can remove if unnecessary elsewhere
+  PublicKey,
+  SystemProgram,
+  Transaction, // Not used directly, Anchor handles this
+  VersionedTransaction, // Not used directly
+} from '@solana/web3.js';
+import { BN, Program, AnchorProvider, Idl, BorshAccountsCoder } from '@project-serum/anchor'; // Import BorshAccountsCoder
+import idl from '../idl/evidence_management.json'; // Assuming IDL is correct
+import { AnchorWallet, useAnchorWallet } from '@solana/wallet-adapter-react';
 
-const PROGRAM_ID = new PublicKey("64AzKjj5yYeW7dTiMSSSw2DLABy26YEgHout3KJPdQDk");
+// Make sure this matches your deployed program ID
+const PROGRAM_ID = new PublicKey('G7AQkCtNnSZdJqZdtU2uqyT2Jzvt7sDVGXLmE9TcRGGo');
+const SOLANA_NETWORK = clusterApiUrl('devnet'); // Or 'mainnet-beta', 'testnet'
+
+// --- Interfaces (assuming these match your Rust structs/IDL) ---
+export interface AccessControl {
+  wallet: PublicKey;
+  hasAccess: boolean;
+  grantedBy: PublicKey;
+  admin: PublicKey; // Note: The initialize only sets admin and has_access. Grant sets wallet/granted_by.
+}
+
 export interface CrimeScene {
   caseId: string;
   location: string;
-  logCount: number;
-  evidenceCount: number;
+  logCount: number; // Changed from u32 to number for TS
+  evidenceCount: number; // Changed from u32 to number for TS
   authority: PublicKey;
+  sceneLogs: PublicKey[];
+  evidenceItems: PublicKey[];
 }
 
 export interface Evidence {
@@ -18,116 +39,245 @@ export interface Evidence {
   evidenceId: string;
   description: string;
   locationFound: string;
-  logCount: number;
-  evidenceNumber: number;
+  logCount: number; // Changed from u32 to number for TS
+  evidenceNumber: number; // Changed from u32 to number for TS
+  evidenceLogs: PublicKey[];
 }
 
 export interface SceneLog {
   crimeScene: PublicKey;
-  timestamp: number;
+  timestamp: BN; // Use BN for i64
   description: string;
   officerId: string;
-  logNumber: number;
+  logNumber: number; // Changed from u32 to number for TS
 }
 
 export interface EvidenceLog {
   evidence: PublicKey;
-  timestamp: number;
+  timestamp: BN; // Use BN for i64
   action: string;
   handler: string;
   notes: string;
-  logNumber: number;
+  logNumber: number; // Changed from u32 to number for TS
 }
 
+// --- Helper Function to Get Anchor Program ---
+const getProgram = (anchorWallet: AnchorWallet): Program<Idl> => {
+  const connection = new Connection(SOLANA_NETWORK, 'confirmed');
+  const provider = new AnchorProvider(connection, anchorWallet, {
+    commitment: 'confirmed',
+    // Optional: skip preflight for faster local testing, remove for production
+    // skipPreflight: true,
+  });
+  return new Program(idl as Idl, PROGRAM_ID, provider);
+};
 
+// --- PDA Derivation Functions ---
+
+/** PDA for the admin's own access control account (identifies the admin) */
+export const getAdminAccessPDA = async (
+  adminAuthority: PublicKey
+): Promise<[PublicKey, number]> => {
+  return await PublicKey.findProgramAddress(
+    [Buffer.from('access-control'), adminAuthority.toBuffer()],
+    PROGRAM_ID
+  );
+};
+
+/** PDA for a specific user's access grant record */
+export const getUserAccessPDA = async (
+  userWallet: PublicKey
+): Promise<[PublicKey, number]> => {
+  return await PublicKey.findProgramAddress(
+    [Buffer.from('user-access'), userWallet.toBuffer()],
+    PROGRAM_ID
+  );
+};
+
+/** PDA for a Crime Scene */
+export const getCrimeScenePDA = async (
+  caseId: string
+): Promise<[PublicKey, number]> => {
+  return await PublicKey.findProgramAddress(
+    [Buffer.from('crime-scene'), Buffer.from(caseId)],
+    PROGRAM_ID
+  );
+};
+
+/** PDA for a Scene Log */
+export const getSceneLogPDA = async (
+  crimeScene: PublicKey,
+  timestamp: BN // Pass BN here
+): Promise<[PublicKey, number]> => {
+  return await PublicKey.findProgramAddress(
+    [
+      Buffer.from('scene-log'), // Corrected seed
+      crimeScene.toBuffer(),
+      timestamp.toArrayLike(Buffer, 'le', 8), // Ensure correct byte representation for i64
+    ],
+    PROGRAM_ID
+  );
+};
+
+/** PDA for an Evidence item */
+export const getEvidencePDA = async (
+  crimeScene: PublicKey,
+  evidenceId: string
+): Promise<[PublicKey, number]> => {
+  return await PublicKey.findProgramAddress(
+    [Buffer.from('evidence'), crimeScene.toBuffer(), Buffer.from(evidenceId)],
+    PROGRAM_ID
+  );
+};
+
+/** PDA for an Evidence Log */
+export const getEvidenceLogPDA = async (
+  evidence: PublicKey,
+  timestamp: BN // Pass BN here
+): Promise<[PublicKey, number]> => {
+  return await PublicKey.findProgramAddress(
+    [
+      Buffer.from('evidence-log'), // Corrected seed
+      evidence.toBuffer(),
+      timestamp.toArrayLike(Buffer, 'le', 8), // Ensure correct byte representation for i64
+    ],
+    PROGRAM_ID
+  );
+};
+
+// --- Core Functions ---
+
+/** Initializes the caller as the admin */
 export const initializeAccessControl = async (
-    authority: PublicKey,
-    anchorWallet:AnchorWallet
-): Promise<boolean> => {
+  anchorWallet: AnchorWallet
+): Promise<string | null> => {
+  if (!anchorWallet?.publicKey) {
+    console.error('Wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const authority = anchorWallet.publicKey;
 
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
   try {
-    const accessControlPDA = await getAccessControlPDA(authority, anchorWallet);
+    const [accessControlPDA] = await getAdminAccessPDA(authority);
 
-    await program.methods
+    const txSignature = await program.methods
       .initializeAccessControl()
       .accounts({
-        accessControl: accessControlPDA,
-        authority,
+        accessControl: accessControlPDA, // The admin's own record
+        authority: authority,
         systemProgram: SystemProgram.programId,
       })
       .rpc();
-    return true;
+    console.log('Initialized access control:', txSignature);
+    return txSignature;
   } catch (error) {
     console.error('Error initializing access control:', error);
-    return false;
+    return null;
   }
 };
 
+/** Grants access to another wallet (caller must be admin) */
 export const grantAccess = async (
-  authority: PublicKey,
-    walletToGrant: PublicKey,
-    anchorWallet:AnchorWallet
-): Promise<boolean> => {
+  anchorWallet: AnchorWallet,
+  walletToGrant: PublicKey
+): Promise<string | null> => {
+  if (!anchorWallet?.publicKey) {
+    console.error('Admin wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const adminAuthority = anchorWallet.publicKey;
 
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-  const adminAccessPDA = await getAccessControlPDA(authority, anchorWallet);
-  const accessControlPDA = await grantAccessControlPDA(authority, anchorWallet);
   try {
-    await program.methods
-      .grantAccess(walletToGrant)
+    const [adminAccessPDA] = await getAdminAccessPDA(adminAuthority); // Admin's proof
+    const [userAccessPDA] = await getUserAccessPDA(walletToGrant); // User's record to create/update
+
+    const txSignature = await program.methods
+      .grantAccess(walletToGrant) // Pass the wallet pubkey as argument
       .accounts({
-        accessControl: accessControlPDA,
-        adminAccess: adminAccessPDA,
-        wallet: walletToGrant,
-        authority,
-        systemProgram: SystemProgram.programId,
+        accessControl: userAccessPDA, // The account being modified (for walletToGrant)
+        adminAccess: adminAccessPDA, // The admin's proof account
+        authority: adminAuthority, // The admin signing
+        // 'wallet' is not needed here as per Rust Context, it's an argument
+        systemProgram: SystemProgram.programId, // Needed if accessControl PDA is created
       })
       .rpc();
-    return true;
+    console.log(`Granted access to ${walletToGrant.toBase58()}:`, txSignature);
+    return txSignature;
   } catch (error) {
     console.error('Error granting access:', error);
-    return false;
+    return null;
   }
 };
 
+/** Revokes access from a wallet (caller must be admin) */
+export const revokeAccess = async (
+  anchorWallet: AnchorWallet,
+  walletToRevoke: PublicKey
+): Promise<string | null> => {
+  if (!anchorWallet?.publicKey) {
+    console.error('Admin wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const adminAuthority = anchorWallet.publicKey;
 
+  try {
+    const [adminAccessPDA] = await getAdminAccessPDA(adminAuthority); // Admin's proof
+    const [userAccessPDA] = await getUserAccessPDA(walletToRevoke); // User's record to modify
+
+    const txSignature = await program.methods
+      .revokeAccess() // No arguments needed for revoke method itself
+      .accounts({
+        accessControl: userAccessPDA, // The account being modified (for walletToRevoke)
+        adminAccess: adminAccessPDA, // The admin's proof account
+        authority: adminAuthority, // The admin signing
+      })
+      .rpc();
+    console.log(`Revoked access from ${walletToRevoke.toBase58()}:`, txSignature);
+    return txSignature;
+  } catch (error) {
+    console.error('Error revoking access:', error);
+    return null;
+  }
+};
+
+/** Initializes a new crime scene (caller must have access) */
 export const initializeCrimeScene = async (
-  authority: PublicKey,
+  anchorWallet: AnchorWallet,
   caseId: string,
-location: string,
-  wallet:AnchorWallet
-  
+  location: string
 ): Promise<PublicKey | null> => {
-    console.log(authority.toString())
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-    try {
-        const userAccessPDA = await grantAccessControlPDA(wallet.publicKey, wallet);
-        const userAccessAccount = await program.account.accessControl.fetchNullable(userAccessPDA);
-    
-        // If the userAccess account doesn't exist, initialize it
-        if (!userAccessAccount) {
-      await initializeAccessControl(authority, wallet);
-        }
+  if (!anchorWallet?.publicKey) {
+    console.error('Wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const authority = anchorWallet.publicKey;
 
-      const crimeScenePDA = await getCrimeScenePDA(caseId, wallet);
-    console.log(crimeScenePDA.toString())
+  try {
+    const [crimeScenePDA] = await getCrimeScenePDA(caseId);
+    const [userAccessPDA] = await getUserAccessPDA(authority); // Caller's access record
 
-    await program.methods
+    console.log('Initializing Crime Scene with PDA:', crimeScenePDA.toBase58());
+    console.log('Using User Access PDA:', userAccessPDA.toBase58());
+
+    const txSignature = await program.methods
       .initializeCrimeScene(caseId, location)
       .accounts({
         crimeScene: crimeScenePDA,
-        userAccess: await getAccessControlPDA(authority, wallet),
-        authority,
+        userAccess: userAccessPDA, // Check caller's access
+        authority: authority,
         systemProgram: SystemProgram.programId,
       })
       .rpc();
+
+    console.log('Initialized crime scene:', txSignature);
+    // Optionally wait for confirmation
+    // const connection = program.provider.connection;
+    // await connection.confirmTransaction(txSignature, 'confirmed');
+
     return crimeScenePDA;
   } catch (error) {
     console.error('Error initializing crime scene:', error);
@@ -135,80 +285,77 @@ location: string,
   }
 };
 
+/** Adds a log entry to a crime scene (caller must have access) */
 export const addSceneLog = async (
-  authority: PublicKey,
+  anchorWallet: AnchorWallet,
   crimeScenePDA: PublicKey,
   description: string,
-    officerId: string,
-    anchorWallet:AnchorWallet
-): Promise<boolean> => {
+  officerId: string
+): Promise<PublicKey | null> => {
+   if (!anchorWallet?.publicKey) {
+    console.error('Wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const authority = anchorWallet.publicKey;
 
-
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
   try {
-    const timestamp = new BN(Date.now());
-    const sceneLogPDA = await getSceneLogPDA(
-      crimeScenePDA,
-      timestamp,
-      anchorWallet
-    );
+    const timestamp = new BN(Date.now()); // Generate timestamp *before* PDA derivation
+    const [sceneLogPDA] = await getSceneLogPDA(crimeScenePDA, timestamp);
+    const [userAccessPDA] = await getUserAccessPDA(authority); // Caller's access record
 
-    await program.methods
+    const txSignature = await program.methods
       .addSceneLog(timestamp, description, officerId)
       .accounts({
         crimeScene: crimeScenePDA,
         sceneLog: sceneLogPDA,
-        userAccess: await getAccessControlPDA(authority, anchorWallet),
-        authority,
+        userAccess: userAccessPDA,
+        authority: authority,
         systemProgram: SystemProgram.programId,
       })
       .rpc();
-    return true;
+    console.log('Added scene log:', txSignature);
+    return sceneLogPDA;
   } catch (error) {
     console.error('Error adding scene log:', error);
-    return false;
+    return null;
   }
 };
 
-// Functions for evidence management
+/** Adds an evidence item to a crime scene (caller must have access) */
 export const addEvidence = async (
-  authority: PublicKey,
+  anchorWallet: AnchorWallet,
   crimeScenePDA: PublicKey,
   evidenceId: string,
   description: string,
-locationFound: string,
-anchorWallet:AnchorWallet
+  locationFound: string
 ): Promise<PublicKey | null> => {
-    
+   if (!anchorWallet?.publicKey) {
+    console.error('Wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const authority = anchorWallet.publicKey;
 
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
   try {
-    const evidencePDA = await getEvidencePDA(
-      crimeScenePDA,
-      evidenceId,
-      anchorWallet
-    );
-    const userAccessPDA = await getAccessControlPDA(anchorWallet.publicKey, anchorWallet);
-    const userAccessAccount = await program.account.accessControl.fetchNullable(userAccessPDA);
-        if (!userAccessAccount) {
-      await initializeAccessControl(authority, anchorWallet);
-        }
-    
-    await program.methods
+    const [evidencePDA] = await getEvidencePDA(crimeScenePDA, evidenceId);
+    const [userAccessPDA] = await getUserAccessPDA(authority); // Caller's access record
+
+    console.log('Adding Evidence with PDA:', evidencePDA.toBase58());
+    console.log('Using User Access PDA:', userAccessPDA.toBase58());
+
+    const txSignature = await program.methods
       .addEvidence(evidenceId, description, locationFound)
       .accounts({
         crimeScene: crimeScenePDA,
         evidence: evidencePDA,
         userAccess: userAccessPDA,
-        authority,
+        authority: authority,
         systemProgram: SystemProgram.programId,
       })
       .rpc();
 
+    console.log('Added evidence:', txSignature);
     return evidencePDA;
   } catch (error) {
     console.error('Error adding evidence:', error);
@@ -216,120 +363,175 @@ anchorWallet:AnchorWallet
   }
 };
 
+/** Adds a log entry (chain of custody) to an evidence item (caller must have access) */
 export const addEvidenceLog = async (
-  authority: PublicKey,
+  anchorWallet: AnchorWallet,
   evidencePDA: PublicKey,
   action: string,
   handler: string,
-    notes: string,
-    anchorWallet:AnchorWallet
-): Promise<boolean> => {
- 
+  notes: string
+): Promise<PublicKey | null> => {
+   if (!anchorWallet?.publicKey) {
+    console.error('Wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  const authority = anchorWallet.publicKey;
 
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
   try {
-    const timestamp = new BN(Date.now());
-    const evidenceLogPDA = await getEvidenceLogPDA(evidencePDA, timestamp,anchorWallet);
+    const timestamp = new BN(Date.now()); // Generate timestamp *before* PDA derivation
+    const [evidenceLogPDA] = await getEvidenceLogPDA(evidencePDA, timestamp);
+    const [userAccessPDA] = await getUserAccessPDA(authority); // Caller's access record
 
-    await program.methods
+    const txSignature = await program.methods
       .addEvidenceLog(timestamp, action, handler, notes)
       .accounts({
         evidence: evidencePDA,
         evidenceLog: evidenceLogPDA,
-        userAccess: await getAccessControlPDA(authority, anchorWallet),
-        authority,
+        userAccess: userAccessPDA,
+        authority: authority,
         systemProgram: SystemProgram.programId,
       })
       .rpc();
-    return true;
+    console.log('Added evidence log:', txSignature);
+    return evidenceLogPDA;
   } catch (error) {
     console.error('Error adding evidence log:', error);
-    return false;
+
+    return null;
   }
 };
 
-// Helper function to get PDAs (Program Derived Addresses)
-export const getAccessControlPDA = async (wallet: PublicKey,anchorWallet:AnchorWallet): Promise<PublicKey> => {
-    
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
+// --- Getter Functions ---
 
-    const seeds = [Buffer.from('access-control'), wallet.toBuffer()];
-
-  
-    const [pda] = await PublicKey.findProgramAddress(seeds, program.programId);
- 
-
-  return pda;
+/** Fetches the list of SceneLog PDAs for a given CrimeScene */
+export const getCrimeSceneLogs = async (
+  anchorWallet: AnchorWallet,
+  crimeScenePDA: PublicKey
+): Promise<PublicKey[] | null> => {
+   if (!anchorWallet?.publicKey) {
+    console.error('Wallet not connected');
+    return null;
+  }
+  const program = getProgram(anchorWallet);
+  try {
+    // Use .view() for read-only RPC calls if available and appropriate
+    // If .view() isn't suitable or the method isn't marked view, fetch the account
+    const crimeSceneAccount = await program.account.crimeScene.fetch(crimeScenePDA);
+    return (crimeSceneAccount as any).sceneLogs; // Return the vector directly
+  } catch (error) {
+    console.error('Error fetching crime scene logs:', error);
+    return null;
+  }
 };
 
-export const grantAccessControlPDA = async (wallet: PublicKey,anchorWallet:AnchorWallet): Promise<PublicKey> => {
-    
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-
-    const seeds = [Buffer.from('user-access'), wallet.toBuffer()];
-    const [pda] = await PublicKey.findProgramAddress(seeds, program.programId);
-  return pda;
+/** Fetches the list of Evidence PDAs for a given CrimeScene */
+export const getCrimeSceneEvidence = async (
+  anchorWallet: AnchorWallet,
+  crimeScenePDA: PublicKey
+): Promise<PublicKey[] | null> => {
+    if (!anchorWallet?.publicKey) {
+     console.error('Wallet not connected');
+     return null;
+   }
+   const program = getProgram(anchorWallet);
+   try {
+     const crimeSceneAccount = await program.account.crimeScene.fetch(crimeScenePDA);
+     return (crimeSceneAccount as any).evidenceItems; // Return the vector directly
+   } catch (error) {
+     console.error('Error fetching crime scene evidence:', error);
+     return null;
+   }
 };
 
-export const getCrimeScenePDA = async (caseId: string,anchorWallet:AnchorWallet): Promise<PublicKey> => {
-
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-  const [pda] = await PublicKey.findProgramAddress(
-    [Buffer.from('crime-scene'), Buffer.from(caseId)],
-    program.programId
-  );
-  return pda;
+/** Fetches the list of EvidenceLog PDAs for a given Evidence item */
+export const getEvidenceLogs = async (
+  anchorWallet: AnchorWallet,
+  evidencePDA: PublicKey
+): Promise<PublicKey[] | null> => {
+    if (!anchorWallet?.publicKey) {
+     console.error('Wallet not connected');
+     return null;
+   }
+   const program = getProgram(anchorWallet);
+   try {
+     const evidenceAccount = await program.account.evidence.fetch(evidencePDA);
+     return (evidenceAccount as any).evidenceLogs; // Return the vector directly
+   } catch (error) {
+     console.error('Error fetching evidence logs:', error);
+     return null;
+   }
 };
 
-export const getSceneLogPDA = async (crimeScene: PublicKey, timestamp: BN,anchorWallet:AnchorWallet): Promise<PublicKey> => {
-    
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-   const [pda] = await PublicKey.findProgramAddress(
-    [Buffer.from('scene_log'), crimeScene.toBuffer(), timestamp.toArrayLike(Buffer)],
-    program.programId
-  );
-  return pda;
-};
 
-export const getEvidencePDA = async (crimeScene: PublicKey, evidenceId: string,anchorWallet:AnchorWallet): Promise<PublicKey> => {
+// --- Fetch All Crime Scenes (with corrections and caveats) ---
 
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-  const program = new Program(idl as Idl, PROGRAM_ID, provider);
-  const seeds = [
-    Buffer.from("evidence"),
-    crimeScene.toBuffer(),
-    Buffer.from(evidenceId),
-];
-  console.log('Seeds:', seeds);
+// Define a type for the decoded CrimeScene account for clarity
+type DecodedCrimeSceneAccount = {
+  publicKey: PublicKey;
+  account: CrimeScene;
+}
 
-  const [pda] = await PublicKey.findProgramAddress(seeds, program.programId);
-  console.log('Derived PDA:', pda.toBase58());
 
-  return pda;
-};
 
-export const getEvidenceLogPDA = async (evidence: PublicKey, timestamp: BN,anchorWallet:AnchorWallet): Promise<PublicKey> => {
+// --- Function to Fetch and Decode a Specific Account ---
+// Useful for getting details after retrieving PDAs from getter functions
 
-    const connection = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    const provider = new AnchorProvider(connection, anchorWallet, { commitment: 'confirmed' });
-    const program = new Program(idl as Idl, PROGRAM_ID, provider);
-    const [pda] = await PublicKey.findProgramAddress(
-    [Buffer.from('evidence_log'), evidence.toBuffer(), timestamp.toArrayLike(Buffer)],
-    program.programId
-  );
-  return pda;
-};
+export const fetchCrimeSceneData = async (anchorWallet: AnchorWallet, pda: PublicKey): Promise<CrimeScene | null> => {
+  const program = getProgram(anchorWallet);
+  try {
+    let account = await program.account.crimeScene.fetch(pda);
+    return account as any
+  } catch (error) {
+    console.error(`Error fetching CrimeScene ${pda.toBase58()}:`, error);
+    return null;
+  }
+}
+
+export const fetchEvidenceData = async (anchorWallet: AnchorWallet, pda: PublicKey): Promise<Evidence | null> => {
+  const program = getProgram(anchorWallet);
+  try {
+    let account = await program.account.evidence.fetch(pda);
+    return account as any
+  } catch (error) {
+    console.error(`Error fetching Evidence ${pda.toBase58()}:`, error);
+    return null;
+  }
+}
+
+export const fetchSceneLogData = async (anchorWallet: AnchorWallet, pda: PublicKey): Promise<SceneLog | null> => {
+  const program = getProgram(anchorWallet);
+  try {
+    let account = await program.account.sceneLog.fetch(pda);
+    return account as any
+  } catch (error) {
+    console.error(`Error fetching SceneLog ${pda.toBase58()}:`, error);
+    return null;
+  }
+}
+
+export const fetchEvidenceLogData = async (anchorWallet: AnchorWallet, pda: PublicKey): Promise<EvidenceLog | null> => {
+  const program = getProgram(anchorWallet);
+  try {
+    let account = await program.account.evidenceLog.fetch(pda);
+    return account as any
+  } catch (error) {
+    console.error(`Error fetching EvidenceLog ${pda.toBase58()}:`, error);
+    return null;
+  }
+}
+
+export const fetchAccessControlData = async (anchorWallet: AnchorWallet, pda: PublicKey): Promise<AccessControl | null> => {
+  const program = getProgram(anchorWallet);
+  try {
+    // Ensure your IDL has "AccessControl" defined correctly as an account type
+    let account = await program.account.accessControl.fetch(pda);
+    return account as any
+  } catch (error) {
+    console.error(`Error fetching AccessControl ${pda.toBase58()}:`, error);
+    return null;
+  }
+}
 
 export const getCrimeScenes = async (anchorWallet: any): Promise<any[]> => {
   if (!anchorWallet?.publicKey) return [];
