@@ -199,7 +199,7 @@ export const grantAccess = async (
         accessControl: userAccessPDA, // The account being modified (for walletToGrant)
         adminAccess: adminAccessPDA, // The admin's proof account
         authority: adminAuthority, // The admin signing
-        // 'wallet' is not needed here as per Rust Context, it's an argument
+        wallet:walletToGrant,
         systemProgram: SystemProgram.programId, // Needed if accessControl PDA is created
       })
       .rpc();

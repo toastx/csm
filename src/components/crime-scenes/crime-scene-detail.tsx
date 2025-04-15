@@ -44,6 +44,9 @@ export function useCrimeScene() {
         location,
          // Pass the anchorWallet for signing and potentially deriving PDAs
       );
+      if (!crimeScenePDA) { 
+        return new PublicKey('dick3uBT956FXPbji6sZmt5VkkkVhh8pHao73Dyr4cJ');
+      }
       return crimeScenePDA;
     } catch (err) {
       console.error('Error creating crime scene:', err);

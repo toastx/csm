@@ -28,6 +28,7 @@
     "fs": "^0.0.1-security",
     "jotai": "^2.9.1",
     "next": "14.2.5",
+    "pinata": "^2.2.0",
     "react": "^18",
     "react-dom": "^18",
     "react-hot-toast": "^2.4.1"
@@ -50,11 +51,16 @@
     "rename": {
       "counter": {
         "to": "{{name}}",
-        "paths": ["anchor", "src"]
+        "paths": [
+          "anchor",
+          "src"
+        ]
       },
       "scaffold": {
         "to": "{{name}}",
-        "paths": ["src"]
+        "paths": [
+          "src"
+        ]
       }
     },
     "instructions": [

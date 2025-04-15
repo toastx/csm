@@ -5,6 +5,9 @@ import { PublicKey } from '@solana/web3.js';
 import { useCrimeScene,useEvidence } from './crime-scene-detail';
 import { getCrimeScenes, getEvidencePDA } from './crime-scene-functions';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { uploadFile } from '../ipfs/ipfs';
+
+
 
 interface CrimeScene {
   id: string;
@@ -24,6 +27,7 @@ interface FullEvidence extends Evidence {
   additionalData: string; // Additional data retrieved from the smart contract
 }
 
+
 export function CrimeScenesFeature() {
   const [selectedScene, setSelectedScene] = useState<CrimeScene | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<FullEvidence | null>(null);
@@ -33,6 +37,22 @@ export function CrimeScenesFeature() {
   const { addNewEvidence, isLoading: isEvidenceLoading, error: evidenceError } = useEvidence();
   const [loading, setLoading] = useState<boolean>(true);
   const wallet = useWallet();
+  // Existing states to keep
+  const [file, setFile] = useState<File>(new File([], ''));
+const [image, setImage] = useState<string>('https://via.placeholder.com/300x300');
+const [name, setName] = useState<string>('');
+const [id, setId] = useState<string>('');
+
+// Updated states for CrimeScene interface
+const [location, setLocation] = useState<string>('');
+const [createdAt, setCreatedAt] = useState<string>(new Date().toISOString().slice(0, 16));
+const [lastUpdated, setLastUpdated] = useState<string>(new Date().toISOString().slice(0, 16));
+
+// Additional states
+const [description, setDescription] = useState<string>('');
+
+  const [ipfsHash, setIpfsHash] = useState<string>('');
+const [isUploading, setIsUploading] = useState<boolean>(false);
   
     useEffect(() => {
       if (wallet.publicKey) {
@@ -42,6 +62,19 @@ export function CrimeScenesFeature() {
           .finally(() => setLoading(false));
       }
     }, [wallet.publicKey]);
+  
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        setFile(file);
+        console.log(typeof file)
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImage(reader.result as string);
+        };
+        reader.readAsDataURL(file); // Convert image file to base64 string
+      }
+    };
   
   const handleCreateCrimeScene = async (location: string) => {
     try {
@@ -135,16 +168,131 @@ export function CrimeScenesFeature() {
                 }
               }}
             >
-              <div className="mb-4">
-                <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
-                <input
-                  type="text"
-                  id="location"
-                  name="location"
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+<div className="mint-page bg-gray-50 p-6 rounded-lg shadow-sm mb-4 max-h-[500px] overflow-y-auto">
+  <div className="mint-container flex flex-col space-y-4">
+    
+    {/* Scene ID Input */}
+    <input 
+      type="text" 
+      name="id"
+      placeholder="Scene ID" 
+      value={id}
+      onChange={(e) => setId(e.target.value)}
+      className="w-full p-3 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+    />
+
+    {/* Name Input */}
+    <input 
+      type="text" 
+      name="name"
+      placeholder="Name" 
+      value={name}
+      onChange={(e) => setName(e.target.value)}
+      className="w-full p-3 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+    />
+
+    {/* Location Input */}
+    <input 
+      type="text" 
+      name="location"
+      placeholder="Location" 
+      value={location}
+      onChange={(e) => setLocation(e.target.value)}
+      className="w-full p-3 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+    />
+    
+    {/* Created At Date Input */}
+    <div className="flex flex-col">
+      <label htmlFor="createdAt" className="mb-1 text-sm text-gray-600">Created At</label>
+      <input 
+        type="datetime-local"
+        id="createdAt"
+        name="createdAt"
+        value={createdAt}
+        onChange={(e) => setCreatedAt(e.target.value)}
+        className="w-full p-3 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      />
+    </div>
+
+    {/* Last Updated Date Input - Optional, can be auto-generated */}
+    <div className="flex flex-col">
+      <label htmlFor="lastUpdated" className="mb-1 text-sm text-gray-600">Last Updated</label>
+      <input 
+        type="datetime-local"
+        id="lastUpdated"
+        name="lastUpdated"
+        disabled
+        value={lastUpdated}
+        className="w-full p-3 text-gray-700 bg-gray-100 border border-gray-300 rounded-md cursor-not-allowed"
+      />
+      <p className="text-xs text-gray-500 mt-1">This field will be auto-updated</p>
+    </div>
+    
+    {/* Description - Shortened textarea with scroll */}
+    <div className="flex flex-col">
+      <label htmlFor="description" className="mb-1 text-sm text-gray-600">Description</label>
+      <textarea
+        id="description"
+        name="description"
+        placeholder="Additional Notes" 
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        className="w-full p-3 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none overflow-auto h-16"
+      ></textarea>
+    </div>
+
+    {/* Image Upload */}
+    <div className="space-y-2">
+      <label className="block text-sm text-gray-600">Scene Photo</label>
+      <div className="image-placeholder w-full h-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center overflow-hidden bg-gray-100">
+        <img src={image} alt="Scene Photo" className="max-w-full max-h-full object-contain" />
+      </div>
+      <input 
+        type="file" 
+        accept="image/*" 
+        onChange={(e) => {
+          const selectedFile = e.target.files?.[0];
+          if (selectedFile) {
+            setFile(selectedFile);
+            const imageUrl = URL.createObjectURL(selectedFile);
+            setImage(imageUrl);
+          }
+        }}
+        className="w-full p-2 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      />
+                  </div>
+                  <div className="flex flex-col space-y-2">
+          <button
+                      onClick={
+                        async () => {
+                          let hash = await uploadFile(file)
+                          setIpfsHash(hash)
+                        }
+                      }
+            disabled={!file || isUploading}
+            className="bg-blue-600 text-white py-1 px-4 rounded-md text-sm font-medium transition hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {isUploading ? 'Uploading...' : 'Upload to IPFS'}
+          </button>
+          
+          {ipfsHash && (
+            <div className="flex items-center text-xs">
+              <span className="text-gray-600 mr-1">IPFS Hash:</span>
+              <span className="text-blue-600 font-mono overflow-hidden overflow-ellipsis">{ipfsHash}</span>
+              <button 
+                onClick={() => navigator.clipboard.writeText(ipfsHash)}
+                className="ml-2 text-gray-500 hover:text-gray-700"
+                title="Copy to clipboard"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+  </div>
+</div>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
