@@ -125,8 +125,9 @@ export const getEvidencePDA = async (
   crimeScene: PublicKey,
   evidenceId: string
 ): Promise<[PublicKey, number]> => {
+  const bn = new BN(0);
   return await PublicKey.findProgramAddress(
-    [Buffer.from('evidence'), crimeScene.toBuffer(), Buffer.from(evidenceId)],
+    [Buffer.from('evidence'), crimeScene.toBuffer(), Buffer.from(bn.toArray('le', 8))],
     PROGRAM_ID
   );
 };

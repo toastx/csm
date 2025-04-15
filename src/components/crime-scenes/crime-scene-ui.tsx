@@ -3,13 +3,15 @@
 import React, { useEffect, useState } from 'react';
 import { PublicKey } from '@solana/web3.js';
 import { useCrimeScene,useEvidence } from './crime-scene-detail';
-import { getCrimeScenes, getEvidencePDA } from './crime-scene-functions';
-import { useWallet } from '@solana/wallet-adapter-react';
+import { addEvidence, getCrimeScenePDA, getCrimeScenes, getEvidencePDA } from './crime-scene-functions';
+import { useAnchorWallet, useWallet } from '@solana/wallet-adapter-react';
 import { uploadFile } from '../ipfs/ipfs';
+import { bs58 } from '@coral-xyz/anchor/dist/cjs/utils/bytes';
 
 
 
 interface CrimeScene {
+  name: string;
   id: string;
   location: string;
   createdAt: string;
@@ -83,6 +85,7 @@ const [isUploading, setIsUploading] = useState<boolean>(false);
 
       if (crimeScenePDA) {
         const newScene: CrimeScene = {
+          name,
           id: crimeScenePDA.toString(),
           location,
           createdAt: new Date().toISOString(),
@@ -332,6 +335,10 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { addNewEvidence, isLoading: isEvidenceLoading, error: evidenceError } = useEvidence();
+  const wallet = useAnchorWallet()
+  if (!wallet) {
+    return null;
+  }
 
   const handleEvidenceClick = async (item: Evidence) => {
     const fullEvidence = await fetchEvidenceData(item);
@@ -429,12 +436,19 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
                   timestamp: new Date().toISOString(),
                   imageUrl, // base64 image string
                 });
+                
+                let tx = addNewEvidence(new PublicKey("81bv3muG6ZAaxXvzJCDMCdWWatupP39tjztqwHSrEGmF"), description,title)
+                await tx;
+                console.log(tx)
                 await handleCreateEvidence(imageUrl, fullMetadata);
+                
               };
           
               reader.readAsDataURL(image);
+              
             }
-          }
+                }
+          
         }}
       >
         <div className="mb-4">
@@ -540,7 +554,7 @@ async function fetchEvidenceData(evidence: Evidence): Promise<FullEvidence> {
   // Simulate fetching additional data from the smart contract
   return new Promise(resolve => {
     setTimeout(() => {
-      resolve({ ...evidence, additionalData: 'Blockchain verified authenticity' });
+      resolve({ ...evidence, additionalData: '' });
     }, 1000);
   });
 }
