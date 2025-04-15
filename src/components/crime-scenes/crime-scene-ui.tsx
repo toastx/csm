@@ -251,12 +251,16 @@ const [isUploading, setIsUploading] = useState<boolean>(false);
         type="file" 
         accept="image/*" 
         onChange={(e) => {
-          const selectedFile = e.target.files?.[0];
-          if (selectedFile) {
-            setFile(selectedFile);
-            const imageUrl = URL.createObjectURL(selectedFile);
-            setImage(imageUrl);
-          }
+          const file = e.target.files?.[0];
+            if (file) {
+              setFile(file);
+              console.log(typeof file)
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                setImage(reader.result as string);
+              };
+              reader.readAsDataURL(file); 
+            }
         }}
         className="w-full p-2 text-gray-700 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
       />
@@ -398,59 +402,116 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
 
       {/* Modal for creating new evidence */}
       {isCreateEvidenceModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-semibold mb-4">Add New Evidence</h2>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const ipfsHash = (e.target as HTMLFormElement).ipfsHash.value;
-                const metadata = (e.target as HTMLFormElement).metadata.value;
-                if (ipfsHash && metadata) {
-                  await handleCreateEvidence(ipfsHash, metadata);
-                }
-              }}
-            >
-              <div className="mb-4">
-                <label htmlFor="ipfsHash" className="block text-sm font-medium text-gray-700">IPFS Hash</label>
-                <input
-                  type="text"
-                  id="ipfsHash"
-                  name="ipfsHash"
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="mb-4">
-                <label htmlFor="metadata" className="block text-sm font-medium text-gray-700">Metadata</label>
-                <input
-                  type="text"
-                  id="metadata"
-                  name="metadata"
-                  required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsCreateEvidenceModalOpen(false)}
-                  className="bg-gray-500 text-white px-4 py-2 rounded-md transition hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500 disabled:bg-gray-400"
-                >
-                  {isLoading ? 'Adding...' : 'Add Evidence'}
-                </button>
-              </div>
-            </form>
-          </div>
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+      <h2 className="text-xl font-semibold mb-4">Add New Evidence</h2>
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target as HTMLFormElement);
+          const metadata = formData.get('metadata') as string;
+          const title = formData.get('title') as string;
+          const description = formData.get('description') as string;
+          const image = formData.get('image') as File;
+          
+          if (metadata && image.size > 0) {
+            
+            if (metadata && image.size > 0) {
+              const reader = new FileReader();
+          
+              reader.onloadend = async () => {
+                const imageUrl = reader.result as string;
+          
+                const fullMetadata = JSON.stringify({
+                  title,
+                  description,
+                  metadata,
+                  timestamp: new Date().toISOString(),
+                  imageUrl, // base64 image string
+                });
+                await handleCreateEvidence(imageUrl, fullMetadata);
+              };
+          
+              reader.readAsDataURL(image);
+            }
+          }
+        }}
+      >
+        <div className="mb-4">
+          <label htmlFor="title" className="block text-sm font-medium text-gray-700">Title</label>
+          <input
+            type="text"
+            id="title"
+            name="title"
+            required
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Evidence title"
+          />
         </div>
-      )}
+        
+        <div className="mb-4">
+          <label htmlFor="image" className="block text-sm font-medium text-gray-700">Image</label>
+          <div className="mt-1 flex items-center">
+            <input
+              type="file"
+              id="image"
+              name="image"
+              accept="image/*"
+              required
+              className="block w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-md file:border-0
+                file:text-sm file:font-semibold
+                file:bg-blue-50 file:text-blue-700
+                hover:file:bg-blue-100"
+            />
+          </div>
+          <p className="mt-1 text-xs text-gray-500">Supported formats: JPG, PNG, GIF (max 5MB)</p>
+        </div>
+        
+        <div className="mb-4">
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
+          <textarea
+            id="description"
+            name="description"
+            rows={3}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Describe this evidence"
+          ></textarea>
+        </div>
+        
+        <div className="mb-4">
+          <label htmlFor="metadata" className="block text-sm font-medium text-gray-700">Additional Metadata</label>
+          <input
+            type="text"
+            id="metadata"
+            name="metadata"
+            required
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Location, date, tags, etc."
+          />
+        </div>
+        
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setIsCreateEvidenceModalOpen(false)}
+            className="bg-gray-500 text-white px-4 py-2 rounded-md transition hover:bg-gray-700"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="bg-green-600 text-white px-4 py-2 rounded-md transition hover:bg-green-500 disabled:bg-gray-400"
+          >
+            {isLoading ? 'Uploading...' : 'Add Evidence'}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+)}
     </div>
   );
 }
@@ -465,10 +526,11 @@ function EvidenceDetail({ evidence, onBack }: { evidence: FullEvidence; onBack: 
       </button>
       <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-semibold text-gray-900 mb-2">Evidence ID: {evidence.id}</h2>
-        <p className="text-gray-600"><strong>IPFS Hash:</strong> {evidence.ipfsHash}</p>
+        
         <p className="text-gray-600"><strong>Metadata:</strong> {evidence.metadata}</p>
         <p className="text-gray-600"><strong>Created At:</strong> {evidence.createdAt}</p>
         <p className="text-gray-600"><strong>Additional Data:</strong> {evidence.additionalData}</p>
+        <img src={evidence.ipfsHash} alt="Evidence" className="mt-4 rounded-lg shadow-md"></img>
       </div>
     </div>
   );

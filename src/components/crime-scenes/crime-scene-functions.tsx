@@ -12,6 +12,7 @@ import { BN, Program, AnchorProvider, Idl, BorshAccountsCoder } from '@project-s
 import idl from '../idl/evidence_management.json'; // Assuming IDL is correct
 import { AnchorWallet, useAnchorWallet } from '@solana/wallet-adapter-react';
 
+
 // Make sure this matches your deployed program ID
 const PROGRAM_ID = new PublicKey('G7AQkCtNnSZdJqZdtU2uqyT2Jzvt7sDVGXLmE9TcRGGo');
 const SOLANA_NETWORK = clusterApiUrl('devnet'); // Or 'mainnet-beta', 'testnet'
@@ -533,42 +534,49 @@ export const fetchAccessControlData = async (anchorWallet: AnchorWallet, pda: Pu
   }
 }
 
+
+
 export const getCrimeScenes = async (anchorWallet: any): Promise<any[]> => {
   if (!anchorWallet?.publicKey) return [];
-  console.log("Getting crime scenes...");
-  const connection = new Connection(clusterApiUrl("devnet"), "confirmed");
-  const pubkey = anchorWallet.publicKey;
-  console.log(pubkey);
-  try {
-    const accounts = await connection.getProgramAccounts(
-      PROGRAM_ID,
-      {
-        filters: [
-          {
-            memcmp: {
-              offset: 89,
-              bytes: pubkey.toBase58(),
+
+  const connection = new Connection("https://devnet.helius-rpc.com/?api-key=dd0e8d2e-6413-4782-9cd7-d1e6c287b6ec", "confirmed");
+  const pubkey = anchorWallet.publicKey.toBase58();
+  const results: any[] = [];
+
+    try {
+      const accounts = await connection.getProgramAccounts(
+        PROGRAM_ID,
+        {
+          filters: [
+            {
+              memcmp: {
+                offset:46,
+                bytes: pubkey,
+              },
             },
-          },
-        ],
-      }
-    );
-    console.log(accounts)
-    return accounts.map((account) => {
-      // Parse the binary data based on your account structure
-      const coder = new anchor.BorshAccountsCoder(idl);
-      const decodedData = coder.decode(account.account.data);
-      
-      return {
-        id: account.pubkey.toBase58(),
-        // You'll need to properly decode the buffer data based on your account structure
-        location: decodedData.location || "Unknown",
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-      };
-    });
-  } catch (error) {
-    console.error("Error fetching crime scenes:", error);
-    return [];
-  }
+          ],
+        }
+      );
+
+      const coder = new BorshAccountsCoder(idl as Idl);
+
+      const decoded = accounts.map((account) => {
+        const decodedData = coder.decode("crimeScene", account.account.data);
+
+        return {
+          id: account.pubkey.toBase58(),
+          location: decodedData.location,
+          caseId: decodedData.case_id,
+          createdAt: new Date().toISOString(),
+          lastUpdated: new Date().toISOString(),
+        };
+      });
+
+      results.push(...decoded);
+    } catch (error) {
+      console.error(`Error fetching at offset :`, error);
+    }
+
+  return results;
 };
+

@@ -44,6 +44,7 @@ export function useCrimeScene() {
         location,
          // Pass the anchorWallet for signing and potentially deriving PDAs
       );
+      console.log(crimeScenePDA)
       if (!crimeScenePDA) { 
         return new PublicKey('dick3uBT956FXPbji6sZmt5VkkkVhh8pHao73Dyr4cJ');
       }
