@@ -21,10 +21,19 @@ interface CrimeScene {
 interface Evidence {
   id: string;
   ipfsHash: string;
-  metadata: string;
+  metadata: Metadata;
   createdAt: string;
 }
 
+
+
+interface Metadata { 
+  title: string; 
+  description: string; 
+  metadata: string; 
+  timestamp: string; 
+  imageUrl: string; 
+}
 interface FullEvidence extends Evidence {
   additionalData: string; // Additional data retrieved from the smart contract
 }
@@ -112,7 +121,7 @@ const [isUploading, setIsUploading] = useState<boolean>(false);
         onCreateEvidence={async (ipfsHash, metadata) => {
           try {
             const crimeScenePDA = new PublicKey(selectedScene.id);
-            const evidencePDA = await addNewEvidence(crimeScenePDA, ipfsHash, metadata);
+            const evidencePDA = await addNewEvidence(crimeScenePDA, ipfsHash, metadata.description);
 
             if (evidencePDA) {
               const newEvidence: Evidence = {
@@ -328,7 +337,7 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
   scene: CrimeScene; 
   onBack: () => void; 
   onSelectEvidence: (evidence: FullEvidence) => void;
-  onCreateEvidence: (ipfsHash: string, metadata: string) => void;
+  onCreateEvidence: (ipfsHash: string, metadata: Metadata) => void;
 }) {
   const [evidence, setEvidence] = useState<Evidence[]>([]);
   const [isCreateEvidenceModalOpen, setIsCreateEvidenceModalOpen] = useState(false);
@@ -345,13 +354,13 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
     onSelectEvidence(fullEvidence);
   };
 
-  const handleCreateEvidence = async (ipfsHash: string, metadata: string) => {
+  const handleCreateEvidence = async (ipfsHash: string, metadata: Metadata) => {
     setIsLoading(true);
     setError(null);
 
     try {
       console.log(scene.id)
-      const evidencePDA = await addNewEvidence(new PublicKey(scene.id), ipfsHash, metadata);
+      const evidencePDA = await addNewEvidence(new PublicKey(scene.id), ipfsHash, metadata.description);
 
         const newEvidence: Evidence = {
           id: Math.random().toString(36).substr(2, 9), // Generate a random ID
@@ -396,7 +405,7 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
           <div key={item.id} className="bg-white border border-gray-300 rounded-lg shadow-md p-6 transition-transform transform hover:-translate-y-1 hover:shadow-lg">
             <h4 className="text-lg font-medium text-gray-800 mb-2">Evidence ID: {item.id}</h4>
             <p className="text-gray-600"><strong>IPFS Hash:</strong> {item.ipfsHash}</p>
-            <p className="text-gray-600"><strong>Metadata:</strong> {item.metadata}</p>
+            <p className="text-gray-600"><strong>Metadata:</strong> {item.metadata.description}</p>
             <p className="text-gray-600"><strong>Created At:</strong> {item.createdAt}</p>
             <button 
               onClick={() => handleEvidenceClick(item)} 
@@ -429,13 +438,13 @@ function CrimeSceneDetail({ scene, onBack, onSelectEvidence, onCreateEvidence }:
               reader.onloadend = async () => {
                 const imageUrl = reader.result as string;
           
-                const fullMetadata = JSON.stringify({
+                const fullMetadata = {
                   title,
                   description,
                   metadata,
                   timestamp: new Date().toISOString(),
                   imageUrl, // base64 image string
-                });
+                };
                 
                 let tx = addNewEvidence(new PublicKey("81bv3muG6ZAaxXvzJCDMCdWWatupP39tjztqwHSrEGmF"), description,title)
                 await tx;
@@ -541,7 +550,10 @@ function EvidenceDetail({ evidence, onBack }: { evidence: FullEvidence; onBack: 
       <div className="bg-white border border-gray-300 rounded-lg shadow-md p-6">
         <h2 className="text-2xl font-semibold text-gray-900 mb-2">Evidence ID: {evidence.id}</h2>
         
-        <p className="text-gray-600"><strong>Metadata:</strong> {evidence.metadata}</p>
+        <p className="text-gray-600"><strong>Description:</strong> {evidence.metadata.description}</p>
+        <p className="text-gray-600"><strong>Timestamp:</strong> {evidence.metadata.timestamp}</p>
+        <p className="text-gray-600"><strong>Title:</strong> {evidence.metadata.title}</p>
+      
         <p className="text-gray-600"><strong>Created At:</strong> {evidence.createdAt}</p>
         <p className="text-gray-600"><strong>Additional Data:</strong> {evidence.additionalData}</p>
         <img src={evidence.ipfsHash} alt="Evidence" className="mt-4 rounded-lg shadow-md"></img>
